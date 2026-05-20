@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANN Trainer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;background:#f5f5f3;color:#1a1a18;min-height:100vh;padding:14px}
+.grid{display:grid;grid-template-columns:367px 1fr;gap:12px;max-width:960px;margin:0 auto}
+.card{background:#fff;border:0.5px solid #e0dfd8;border-radius:10px;padding:12px 14px}
+.sec{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#888;margin:0 0 9px}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.lbl{font-size:12px;color:#555;min-width:96px;flex-shrink:0}
+.row input,.row select{flex:1;font-size:12px;padding:4px 7px;border:0.5px solid #d8d7d0;border-radius:6px;background:#fafaf8;color:#1a1a18;outline:none}
+.row input:focus,.row select:focus{border-color:#888;background:#fff}
+.dz{border:1px dashed #ccc;border-radius:7px;padding:9px 10px;cursor:pointer;font-size:12px;color:#777;text-align:center;transition:all .15s}
+.dz:hover{background:#f0f0ec;border-color:#999}
+.dz.ok{border-color:#1D9E75;color:#0F6E56;background:#E1F5EE;font-size:11.5px}
+.dz .hint{font-size:10.5px;color:#aaa;margin-top:2px}
+.fl-lbl{font-size:11.5px;color:#666;margin:8px 0 3px}
+input[type=file]{display:none}
+.btn{width:100%;padding:8px;font-size:13px;font-weight:500;background:#1a1a18;color:#fff;border:none;border-radius:7px;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:default}
+.btn-sm{font-size:12px;padding:6px 10px;background:transparent;border:0.5px solid #d8d7d0;border-radius:7px;cursor:pointer;color:#444;flex:1;transition:background .1s}
+.btn-sm:hover{background:#f0f0ec}
+.btn-sm:disabled{opacity:.4;cursor:default}
+.metric{background:#f5f5f2;border-radius:7px;padding:9px 10px;text-align:center}
+.ml{font-size:10.5px;color:#888;margin-bottom:2px}
+.mv{font-size:17px;font-weight:600;color:#1a1a18}
+.mv.good{color:#0F6E56}
+.mv.warn{color:#993C1D}
+.prog{height:3px;background:#e8e7e0;border-radius:2px;overflow:hidden;margin:5px 0}
+.pf{height:100%;width:0;background:#378ADD;border-radius:2px;transition:width .12s}
+.tab{font-size:12px;padding:4px 11px;background:transparent;border:0.5px solid #e0dfd8;border-radius:20px;cursor:pointer;color:#777;transition:all .1s}
+.tab.on{background:#1a1a18;color:#fff;border-color:#1a1a18}
+.log{font-size:11px;font-family:'SF Mono','Consolas',monospace;color:#666;max-height:88px;overflow-y:auto;background:#f7f7f4;border:0.5px solid #e5e4dc;border-radius:6px;padding:6px 8px;line-height:1.6;white-space:pre-wrap}
+.hdr{font-size:15px;font-weight:600;letter-spacing:-.01em;color:#1a1a18;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#E1F5EE;color:#0F6E56;letter-spacing:.04em}
+.sep{height:0.5px;background:#e8e7e0;margin:8px 0}
+@media(max-width:650px){.grid{grid-template-columns:1fr}}
+
+.rc{border:0.5px solid #d8d7d0;border-radius:7px;padding:7px 10px;cursor:pointer;
+  display:flex;align-items:flex-start;gap:8px;background:#fff;transition:all .15s;}
+.rc:hover{background:#f5f5f2;}
+.rc:has(input:checked){border-color:#1a1a18;background:#f0f0ec;}
+.rc input[type=radio]{accent-color:#1a1a18;margin-top:2px;flex-shrink:0;}
+.rc-t{font-size:12px;font-weight:600;color:#1a1a18;margin-bottom:1px;}
+.rc-d{font-size:10.5px;color:#888;}
+.dl-bar{display:none;flex-wrap:wrap;gap:6px;}
+.dl-bar.on{display:flex;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  ANN Trainer <span class="badge">MATLAB-compatible</span>
+</div>
+
+<div class="grid">
+
+<!-- ======= LEFT PANEL ======= -->
+<div style="display:flex;flex-direction:column;gap:10px">
+
+  <!-- Data Upload -->
+  <div class="card">
+    <p class="sec">Dataset</p>
+    <!-- Split mode selector -->
+    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px">
+      <label class="rc">
+        <input type="radio" name="dsm" value="auto" checked onchange="splitMode='auto';showSplit()">
+        <div><div class="rc-t">Auto Split</div><div class="rc-d">One file — platform splits automatically</div></div>
+      </label>
+      <label class="rc">
+        <input type="radio" name="dsm" value="manual" onchange="splitMode='manual';showSplit()">
+        <div><div class="rc-t">Manual Split</div><div class="rc-d">Separate train + test files</div></div>
+      </label>
+    </div>
+
+    <!-- AUTO section -->
+    <div id="sec-auto">
+      <p class="fl-lbl">Dataset file <span style="color:#aaa">(last col = target)</span></p>
+      <div class="dz" id="dz-main" onclick="document.getElementById('f-main').click()">
+        ↑ Click to upload CSV / XLSX
+        <div class="hint">Headers optional. Last column = target.</div>
+      </div>
+      <input type="file" id="f-main" accept=".csv,.xlsx,.xls" onchange="loadFile('main',this)">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">
+        <div>
+          <p class="fl-lbl">Test %</p>
+          <select id="tsz" style="width:100%;font-size:12px;padding:4px 6px;border:0.5px solid #d8d7d0;border-radius:6px;background:#fafaf8;color:#1a1a18">
+            <option value="0.10">10 %</option>
+            <option value="0.15">15 %</option>
+            <option value="0.20" selected>20 %</option>
+            <option value="0.25">25 %</option>
+            <option value="0.30">30 %</option>
+          </select>
+        </div>
+        <div>
+          <p class="fl-lbl">Seed</p>
+          <input type="number" id="rsd" value="1" min="0" max="9999"
+            style="width:100%;font-size:12px;padding:4px 6px;border:0.5px solid #d8d7d0;border-radius:6px;background:#fafaf8;color:#1a1a18">
+        </div>
+        <div>
+          <p class="fl-lbl">Shuffle</p>
+          <select id="shuf" style="width:100%;font-size:12px;padding:4px 6px;border:0.5px solid #d8d7d0;border-radius:6px;background:#fafaf8;color:#1a1a18">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- MANUAL section -->
+    <div id="sec-manual" style="display:none">
+      <p class="fl-lbl">Training data</p>
+      <div class="dz" id="dz-tr" onclick="document.getElementById('f-tr').click()">
+        ↑ Click to upload CSV / XLSX
+        <div class="hint">Last column = target. No headers needed.</div>
+      </div>
+      <input type="file" id="f-tr" accept=".csv,.xlsx,.xls" onchange="loadFile('train',this)">
+      <p class="fl-lbl">Test data</p>
+      <div class="dz" id="dz-ts" onclick="document.getElementById('f-ts').click()">
+        ↑ Click to upload CSV / XLSX
+      </div>
+      <input type="file" id="f-ts" accept=".csv,.xlsx,.xls" onchange="loadFile('test',this)">
+    </div>
+  </div>
+
+  <!-- Network -->
+  <div class="card">
+    <p class="sec">Network architecture</p>
+    <div class="row"><span class="lbl">Hidden layers</span><input type="text" id="hidden" value="10" placeholder="e.g. 10  or  10 10  or  10 12 8"></div>
+    <div class="row"><span class="lbl">Hidden act.</span>
+      <select id="hfn">
+        <option value="tansig">tansig (tanh)</option>
+        <option value="logsig">logsig (sigmoid)</option>
+        <option value="purelin">purelin (linear)</option>
+      </select>
+    </div>
+    <div class="row"><span class="lbl">Output act.</span>
+      <select id="ofn">
+        <option value="purelin">purelin (linear)</option>
+        <option value="tansig">tansig (tanh)</option>
+        <option value="logsig">logsig (sigmoid)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Training -->
+  <div class="card">
+    <p class="sec">Training parameters</p>
+    <div class="row"><span class="lbl">trainFcn</span>
+      <select id="algo" onchange="updateLR()">
+        <option value="trainlm">trainlm  (Levenberg-Marquardt)</option>
+        <option value="trainbr">trainbr  (Bayesian Regularization)</option>
+        <option value="traincgb">traincgb  (CG Powell-Beale)</option>
+        <option value="traincgf">traincgf  (CG Fletcher-Reeves)</option>
+        <option value="traincgp">traincgp  (CG Polak-Ribiére)</option>
+        <option value="trainscg">trainscg  (Scaled CG)</option>
+        <option value="trainoss">trainoss  (One-Step Secant)</option>
+        <option value="traingdm">traingdm  (GD + Momentum)</option>
+        <option value="traingdx">traingdx  (Adaptive LR GD)</option>
+        <option value="traingd">traingd  (Gradient Descent)</option>
+      </select>
+    </div>
+    <div class="row"><span class="lbl">Epochs</span><input type="number" id="epochs" value="100" min="1" max="10000"></div>
+    <div class="row"><span class="lbl">Learning rate</span><input type="number" id="lr" value="0.01" step="0.0001" min="0.000001"></div>
+    <div class="row"><span class="lbl">Batch size</span><input type="number" id="batch" value="0" min="0" title="0 = full batch"></div>
+    <div class="row"><span class="lbl">Val ratio</span><input type="number" id="valratio" value="0.0" step="0.05" min="0" max="0.5"></div>
+    <div class="row"><span class="lbl">L2 lambda</span><input type="number" id="lambda" value="0.001" step="0.0001" min="0"></div>
+  </div>
+
+  <!-- Actions -->
+  <button class="btn" id="btn-train" onclick="startTraining()">▶ Train Network</button>
+  <div style="display:flex;gap:6px">
+    <button class="btn-sm" id="btn-save" onclick="saveModel()" disabled>↓ Save model</button>
+    <button class="btn-sm" onclick="document.getElementById('f-model').click()">↑ Load model</button>
+    <input type="file" id="f-model" accept=".json" onchange="loadModel(this)">
+  </div>
+
+</div>
+
+<!-- ======= RIGHT PANEL ======= -->
+<div style="display:flex;flex-direction:column;gap:10px">
+
+  <!-- Progress -->
+  <div class="card" style="padding:10px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <p class="sec" style="margin:0">Progress</p>
+      <span id="ep-lbl" style="font-size:11px;color:#aaa">—</span>
+    </div>
+    <div class="prog"><div class="pf" id="pf"></div></div>
+  </div>
+
+  <!-- Metrics -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+    <div class="metric"><p class="ml">RMSE Train</p><p class="mv" id="m-rtr">—</p></div>
+    <div class="metric"><p class="ml">RMSE Test</p><p class="mv" id="m-rts">—</p></div>
+    <div class="metric"><p class="ml">R² Train</p><p class="mv" id="m-r2tr">—</p></div>
+    <div class="metric"><p class="ml">R² Test</p><p class="mv" id="m-r2ts">—</p></div>
+  </div>
+
+  <!-- Downloads -->
+  <div class="dl-bar" id="dl-bar">
+    <button class="btn-sm" onclick="dlPredTrain()">↓ Train predictions</button>
+    <button class="btn-sm" onclick="dlPredTest()">↓ Test predictions</button>
+    <button class="btn-sm" id="btn-dl-sptr" style="display:none" onclick="dlSplitTrain()">↓ Split train set</button>
+    <button class="btn-sm" id="btn-dl-spts" style="display:none" onclick="dlSplitTest()">↓ Split test set</button>
+    <button class="btn-sm" onclick="dlResults()">↓ Results CSV</button>
+  </div>
+
+  <!-- Charts -->
+  <div class="card" style="flex:1">
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="tab on" onclick="showTab('reg')" id="tab-reg">Regression</button>
+      <button class="tab" onclick="showTab('loss')" id="tab-loss">Loss curve</button>
+      <button class="tab" onclick="showTab('pred')" id="tab-pred">Predict</button>
+    </div>
+
+    <div id="pnl-reg" style="position:relative;height:260px">
+      <canvas id="ch-reg"></canvas>
+    </div>
+
+    <div id="pnl-loss" style="display:none;position:relative;height:260px">
+      <canvas id="ch-loss"></canvas>
+    </div>
+
+    <div id="pnl-pred" style="display:none">
+      <p style="font-size:12px;color:#666;margin-bottom:8px">Enter comma-separated input values (one per feature):</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="pred-in" placeholder="e.g. 1.2, 0.5, 3.8" style="flex:1;padding:6px 9px;border:0.5px solid #d8d7d0;border-radius:6px;font-size:13px;background:#fafaf8">
+        <button onclick="runPred()" style="padding:6px 14px;background:#1a1a18;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">Run</button>
+      </div>
+      <div id="pred-out" style="font-size:13px;color:#555;min-height:28px"></div>
+      <div class="sep" style="margin:14px 0"></div>
+      <p style="font-size:12px;color:#666;margin-bottom:8px">Batch predict — upload a CSV/XLSX with only input features:</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="dz" id="dz-batch" onclick="document.getElementById('f-batch').click()" style="flex:1;padding:7px 10px">
+          ↑ Upload file for batch prediction
+        </div>
+        <input type="file" id="f-batch" accept=".csv,.xlsx,.xls" onchange="batchPredict(this)">
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log" id="log">Ready. Upload data and press Train Network.</div>
+
+</div>
+</div>
+
+<script>
+// ===== State =====
+let trainData=null, testData=null, mainData=null, currentModel=null, isTraining=false;
+let splitMode='auto';
+let splitCSV={headers:[],Xtr:[],Ytr:[],Xts:[],Yts:[]};
+let lastPreds={trAct:[],trPred:[],tsAct:[],tsPred:[]};
+let lastResults=null;
+let regChart=null, lossChart=null;
+window.addEventListener('load',()=>{updateLR();showSplit();});
+
+// ===== File Loading =====
+function loadFile(type, inp) {
+  const file=inp.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let rows;
+    if(file.name.match(/\.csv$/i)) {
+      rows=e.target.result.trim().split('\n').map(l=>l.split(',').map(v=>parseFloat(v.trim())));
+    } else {
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      rows=XLSX.utils.sheet_to_json(ws,{header:1});
+      // Skip header row if first row has non-numeric
+      if(rows.length && rows[0].some(v=>isNaN(parseFloat(v)))) rows=rows.slice(1);
+      rows=rows.map(r=>r.map(v=>parseFloat(v)));
+    }
+    rows=rows.filter(r=>r.length>0 && r.every(v=>!isNaN(v)));
+    if(!rows.length){addLog('Error: no valid numeric rows found'); return;}
+    if(type==='main'){
+      mainData=rows;
+      setDz('dz-main',`✓ ${file.name}  (${rows.length} samples × ${rows[0].length} cols)`);
+      addLog(`Dataset: ${rows.length} samples, ${rows[0].length-1} input(s), 1 output`);
+    } else if(type==='train'){
+      trainData=rows;
+      setDz('dz-tr',`✓ ${file.name}  (${rows.length} samples × ${rows[0].length} cols)`);
+      addLog(`Train: ${rows.length} samples, ${rows[0].length-1} input(s), 1 output`);
+    } else {
+      testData=rows;
+      setDz('dz-ts',`✓ ${file.name}  (${rows.length} samples × ${rows[0].length} cols)`);
+      addLog(`Test: ${rows.length} samples loaded`);
+    }
+  };
+  if(file.name.match(/\.csv$/i)) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+function setDz(id, txt){
+  const el=document.getElementById(id);
+  el.textContent=txt; el.className='dz ok';
+}
+
+// ===== Normalization =====
+function computeNorm(rows){
+  const n=rows[0].length;
+  const mn=Array(n).fill(Infinity), mx=Array(n).fill(-Infinity);
+  for(const r of rows) r.forEach((v,j)=>{if(v<mn[j])mn[j]=v;if(v>mx[j])mx[j]=v;});
+  return{mn,mx};
+}
+function applyNorm(rows,norm){
+  return rows.map(r=>r.map((v,j)=>{
+    const d=norm.mx[j]-norm.mn[j]; return d<1e-10?0:2*(v-norm.mn[j])/d-1;
+  }));
+}
+function denorm(v,norm,j){
+  const d=norm.mx[j]-norm.mn[j]; return d<1e-10?norm.mn[j]:(v+1)*d/2+norm.mn[j];
+}
+
+// ===== Neural Network =====
+function rnd(s){return(Math.random()*2-1)*s;}
+
+class ANN {
+  constructor(topo,acts,cfg){
+    this.topo=topo; this.acts=acts;
+    this.algo=cfg.algo||'adam'; this.lr=cfg.lr||0.01; this.lam=cfg.lam||0.001;
+    this.W=[]; this.b=[];
+    for(let l=0;l<topo.length-1;l++){
+      const ni=topo[l],no=topo[l+1],sc=Math.sqrt(2/(ni+no));
+      this.W.push(Array.from({length:no},()=>Array.from({length:ni},()=>rnd(sc))));
+      this.b.push(Array(no).fill(0));
+    }
+    // optimizer state
+    const z2=(a)=>a.map(r=>r.map(()=>0));
+    const z1=(a)=>a.map(()=>0);
+    this.mW=this.W.map(z2); this.vW=this.W.map(z2);
+    this.mB=this.b.map(z1); this.vB=this.b.map(z1);
+    this.mom=this.W.map(z2); this.momB=this.b.map(z1);
+    this.t=0;
+  }
+  fn(x,f){
+    if(f==='tansig')return Math.tanh(x);
+    if(f==='logsig')return 1/(1+Math.exp(-x));
+    return x;
+  }
+  dfn(a,f){
+    if(f==='tansig')return 1-a*a;
+    if(f==='logsig')return a*(1-a);
+    return 1;
+  }
+  fwd(x){
+    const A=[x],Z=[];
+    let a=x;
+    for(let l=0;l<this.W.length;l++){
+      const z=this.W[l].map((row,i)=>row.reduce((s,w,j)=>s+w*a[j],0)+this.b[l][i]);
+      Z.push(z); a=z.map(v=>this.fn(v,this.acts[l])); A.push(a);
+    }
+    return{A,Z};
+  }
+  predict(x){return this.fwd(x).A.at(-1);}
+  step(xs,ys){
+    const nL=this.W.length, n=xs.length;
+    const dW=this.W.map(w=>w.map(r=>r.map(()=>0)));
+    const dB=this.b.map(b=>b.map(()=>0));
+    let loss=0;
+    for(let s=0;s<n;s++){
+      const{A}=this.fwd(xs[s]);
+      const yp=A[nL],yt=ys[s];
+      loss+=yt.reduce((sum,y,i)=>sum+(yp[i]-y)**2,0);
+      let delta=yp.map((p,i)=>(p-yt[i])*this.dfn(p,this.acts[nL-1]));
+      for(let l=nL-1;l>=0;l--){
+        for(let i=0;i<delta.length;i++){
+          dB[l][i]+=delta[i];
+          for(let j=0;j<A[l].length;j++) dW[l][i][j]+=delta[i]*A[l][j];
+        }
+        if(l>0){
+          delta=A[l].map((a,j)=>{
+            let sm=0;
+            for(let i=0;i<delta.length;i++) sm+=this.W[l][i][j]*delta[i];
+            return sm*this.dfn(a,this.acts[l-1]);
+          });
+        }
+      }
+    }
+    this.t++;
+    const b1=0.9,b2=0.999,eps=1e-8,mu=0.9;
+    for(let l=0;l<nL;l++){
+      for(let i=0;i<this.W[l].length;i++){
+        for(let j=0;j<this.W[l][i].length;j++){
+          let g=dW[l][i][j]/n;
+          if(this.algo==='adaml2') g+=this.lam*this.W[l][i][j];
+          if(this.algo==='adam'||this.algo==='adaml2'){
+            this.mW[l][i][j]=b1*this.mW[l][i][j]+(1-b1)*g;
+            this.vW[l][i][j]=b2*this.vW[l][i][j]+(1-b2)*g*g;
+            const mh=this.mW[l][i][j]/(1-b1**this.t);
+            const vh=this.vW[l][i][j]/(1-b2**this.t);
+            this.W[l][i][j]-=this.lr*mh/(Math.sqrt(vh)+eps);
+          } else if(this.algo==='cgm'||this.algo==='sgdm'){
+            this.mom[l][i][j]=mu*this.mom[l][i][j]-this.lr*g;
+            this.W[l][i][j]+=this.mom[l][i][j];
+          } else if(this.algo==='adagrad'){
+            this.vW[l][i][j]+=g*g;
+            this.W[l][i][j]-=this.lr*g/(Math.sqrt(this.vW[l][i][j])+eps);
+          } else {
+            this.W[l][i][j]-=this.lr*g;
+          }
+        }
+        const gb=dB[l][i]/n;
+        if(this.algo==='adam'||this.algo==='adaml2'){
+          this.mB[l][i]=b1*this.mB[l][i]+(1-b1)*gb;
+          this.vB[l][i]=b2*this.vB[l][i]+(1-b2)*gb*gb;
+          const mh=this.mB[l][i]/(1-b1**this.t);
+          const vh=this.vB[l][i]/(1-b2**this.t);
+          this.b[l][i]-=this.lr*mh/(Math.sqrt(vh)+eps);
+        } else if(this.algo==='cgm'||this.algo==='sgdm'){
+          this.momB[l][i]=mu*this.momB[l][i]-this.lr*gb;
+          this.b[l][i]+=this.momB[l][i];
+        } else if(this.algo==='adagrad'){
+          this.vB[l][i]+=gb*gb;
+          this.b[l][i]-=this.lr*gb/(Math.sqrt(this.vB[l][i])+eps);
+        } else {
+          this.b[l][i]-=this.lr*gb;
+        }
+      }
+    }
+    return loss/n;
+  }
+}
+
+// ===== Metrics =====
+function rmse(a,b){return Math.sqrt(a.reduce((s,v,i)=>s+(v-b[i])**2,0)/a.length);}
+function r2(a,b){
+  const n=a.length,ma=a.reduce((s,v)=>s+v,0)/n;
+  let ss=0,sr=0;
+  a.forEach((v,i)=>{ss+=(v-b[i])**2;sr+=(v-ma)**2;});
+  return 1-ss/sr;
+}
+
+// ===== Charts =====
+function showTab(t){
+  ['reg','loss','pred'].forEach(id=>{
+    document.getElementById('pnl-'+id).style.display=id===t?'':'none';
+    document.getElementById('tab-'+id).className='tab'+(id===t?' on':'');
+  });
+}
+
+function mkReg(trA,trP,tsA,tsP){
+  if(regChart) regChart.destroy();
+  const all=[...trA,...trP,...(tsA||[]),...(tsP||[])];
+  const mn=Math.min(...all),mx=Math.max(...all);
+  const datasets=[
+    {label:'Train',data:trA.map((a,i)=>({x:a,y:trP[i]})),backgroundColor:'rgba(55,138,221,0.55)',pointRadius:3,pointHoverRadius:5},
+    {label:'y = x',data:[{x:mn,y:mn},{x:mx,y:mx}],type:'line',borderColor:'rgba(160,160,155,0.7)',borderDash:[5,4],pointRadius:0,showLine:true,borderWidth:1.5}
+  ];
+  if(tsA) datasets.splice(1,0,{label:'Test',data:tsA.map((a,i)=>({x:a,y:tsP[i]})),backgroundColor:'rgba(29,158,117,0.55)',pointRadius:3,pointHoverRadius:5});
+  regChart=new Chart(document.getElementById('ch-reg').getContext('2d'),{
+    type:'scatter',data:{datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{title:{display:true,text:'Actual',font:{size:11}}},y:{title:{display:true,text:'Predicted',font:{size:11}}}},
+      plugins:{legend:{position:'top',labels:{boxWidth:10,font:{size:11}}}}}
+  });
+}
+
+function mkLoss(tl,vl){
+  if(lossChart) lossChart.destroy();
+  const labels=tl.map((_,i)=>i+1);
+  const ds=[{label:'Train MSE',data:tl,borderColor:'#378ADD',fill:false,pointRadius:0,borderWidth:1.8}];
+  if(vl.length) ds.push({label:'Val MSE',data:vl,borderColor:'#1D9E75',fill:false,pointRadius:0,borderWidth:1.8});
+  lossChart=new Chart(document.getElementById('ch-loss').getContext('2d'),{
+    type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{type:'logarithmic',title:{display:true,text:'MSE (log)',font:{size:11}}}},
+      plugins:{legend:{position:'top',labels:{boxWidth:10,font:{size:11}}}}}
+  });
+}
+
+// MATLAB trainFcn → JS optimizer mapping
+const ALGO_MAP={
+  trainlm: {opt:'adam',   lr:0.01,  note:'Adam optimizer (fast, recommended for regression)'},
+  trainbr: {opt:'adaml2', lr:0.001, note:'Adam + L2 regularization (reduces overfitting)'},
+  traincgb:{opt:'cgm',    lr:0.005, note:'Conjugate gradient with momentum (Powell-Beale)'},
+  traincgf:{opt:'cgm',    lr:0.005, note:'Conjugate gradient with momentum (Fletcher-Reeves)'},
+  traincgp:{opt:'cgm',    lr:0.005, note:'Conjugate gradient with momentum (Polak-Ribiére)'},
+  trainscg: {opt:'cgm',   lr:0.003, note:'Scaled conjugate gradient'},
+  trainoss: {opt:'cgm',   lr:0.003, note:'One-step secant (quasi-Newton approx.)'},
+  traingdm: {opt:'sgdm',  lr:0.01,  note:'Gradient descent with momentum'},
+  traingdx: {opt:'adagrad',lr:0.01, note:'Adaptive learning rate gradient descent'},
+  traingd:  {opt:'sgd',   lr:0.001, note:'Vanilla gradient descent (slowest)'}
+};
+
+function updateLR(){
+  const key=document.getElementById('algo').value;
+  const m=ALGO_MAP[key];
+  document.getElementById('lr').value=m.lr;
+}
+
+function showSplit(){
+  document.getElementById('sec-auto').style.display   = splitMode==='auto'   ? '' : 'none';
+  document.getElementById('sec-manual').style.display = splitMode==='manual' ? '' : 'none';
+}
+
+function splitData(rows, frac, seed, shuffle){
+  let data = [...rows];
+  if(shuffle){
+    let s=seed>>>0||1;
+    const rng=()=>{s=Math.imul(s^s>>>15,1|s);s^=s+Math.imul(s^s>>>7,61|s);return((s^s>>>14)>>>0)/4294967296;};
+    data.sort(()=>rng()-.5);
+  }
+  const nTest = Math.max(1, Math.round(data.length * frac));
+  return { testRows: data.slice(0, nTest), trainRows: data.slice(nTest) };
+}
+
+function addLog(msg){
+  const el=document.getElementById('log');
+  el.textContent+=(el.textContent?'\n':'')+msg;
+  el.scrollTop=el.scrollHeight;
+}
+
+function setMetric(id,val,good){
+  const el=document.getElementById(id);
+  el.textContent=val;
+  el.className='mv'+(good===true?' good':good===false?' warn':'');
+}
+
+async function startTraining(){
+  // Validate data availability based on mode
+  if(splitMode==='auto'&&!mainData){addLog('Error: upload a dataset file first.');return;}
+  if(splitMode==='manual'&&!trainData){addLog('Error: upload training data first.');return;}
+  if(isTraining) return;
+  isTraining=true;
+  document.getElementById('btn-train').disabled=true;
+  document.getElementById('btn-save').disabled=true;
+
+  // Parse hidden layers: accept MATLAB space-separated "10 10" or comma "10,10" or mixed
+  const hiddenRaw=document.getElementById('hidden').value.trim();
+  const hidden=hiddenRaw.split(/[\s,]+/).map(s=>parseInt(s)).filter(n=>n>0&&!isNaN(n));
+  if(!hidden.length){addLog('Error: invalid hidden layer config');isTraining=false;document.getElementById('btn-train').disabled=false;return;}
+  const hfn=document.getElementById('hfn').value;
+  const ofn=document.getElementById('ofn').value;
+  const trainFcn=document.getElementById('algo').value;
+  const algoMap=ALGO_MAP[trainFcn]; const algo=algoMap.opt;
+  const epochs=Math.max(1,parseInt(document.getElementById('epochs').value)||100);
+  const lr=parseFloat(document.getElementById('lr').value)||0.01;
+  const bs=parseInt(document.getElementById('batch').value)||0;
+  const vr=parseFloat(document.getElementById('valratio').value)||0;
+  const lam=parseFloat(document.getElementById('lambda').value)||0.001;
+
+  // ── Resolve train/test sets based on split mode ──
+  let sourceTrainData, sourceTestData;
+  splitCSV={headers:[],Xtr:[],Ytr:[],Xts:[],Yts:[]};
+
+  if(splitMode==='auto'){
+    const frac=parseFloat(document.getElementById('tsz').value)||0.2;
+    const seed=parseInt(document.getElementById('rsd').value)||1;
+    const shuffle=document.getElementById('shuf').value==='true';
+    const sp=splitData(mainData, frac, seed, shuffle);
+    sourceTrainData=sp.trainRows; sourceTestData=sp.testRows;
+    // Store for download (un-normalised original values)
+    const nf=mainData[0].length-1;
+    splitCSV.Xtr=sp.trainRows.map(r=>r.slice(0,nf));
+    splitCSV.Ytr=sp.trainRows.map(r=>r[nf]);
+    splitCSV.Xts=sp.testRows.map(r=>r.slice(0,nf));
+    splitCSV.Yts=sp.testRows.map(r=>r[nf]);
+    addLog(`Auto-split: ${sp.trainRows.length} train + ${sp.testRows.length} test (seed=${seed}, shuffle=${shuffle})`);
+    document.getElementById('btn-dl-sptr').style.display='';
+    document.getElementById('btn-dl-spts').style.display='';
+  } else {
+    sourceTrainData=trainData;
+    sourceTestData=testData;
+    document.getElementById('btn-dl-sptr').style.display='none';
+    document.getElementById('btn-dl-spts').style.display='none';
+  }
+
+  const nFeat=sourceTrainData[0].length-1;
+  let trSet=[...sourceTrainData], valSet=[];
+  if(vr>0){
+    trSet=sourceTrainData.slice().sort(()=>Math.random()-.5);
+    const nv=Math.max(1,Math.floor(trSet.length*vr));
+    valSet=trSet.slice(0,nv); trSet=trSet.slice(nv);
+  }
+
+  const norm=computeNorm(sourceTrainData);
+  const trN=applyNorm(trSet,norm);
+  const valN=valSet.length?applyNorm(valSet,norm):[];
+  const tsN=sourceTestData?applyNorm(sourceTestData,norm):null;
+
+  const trX=trN.map(r=>r.slice(0,nFeat));  const trY=trN.map(r=>[r[nFeat]]);
+  const valX=valN.map(r=>r.slice(0,nFeat)); const valY=valN.map(r=>[r[nFeat]]);
+  const tsX=tsN?tsN.map(r=>r.slice(0,nFeat)):null; const tsY=tsN?tsN.map(r=>[r[nFeat]]):null;
+
+  const topo=[nFeat,...hidden,1];
+  const acts=[...hidden.map(()=>hfn),ofn];
+  const net=new ANN(topo,acts,{algo,lr,lam});
+
+  addLog(`Net: [${topo.join('→')}] | Acts: [${acts.join(',')}] | trainFcn: ${trainFcn} (${algo}) | lr=${lr}`);
+  addLog(`Samples: ${trSet.length} train${valSet.length?', '+valSet.length+' val':''}${testData?', '+testData.length+' test':''}`);
+
+  const tLoss=[],vLoss=[];
+  const pf=document.getElementById('pf');
+  const epl=document.getElementById('ep-lbl');
+  const chunk=Math.max(1,Math.floor(epochs/80));
+
+  for(let ep=0;ep<epochs;){
+    const end=Math.min(ep+chunk,epochs);
+    for(let e=ep;e<end;e++){
+      const idx=[...Array(trX.length).keys()].sort(()=>Math.random()-.5);
+      const b=bs>0?bs:trX.length;
+      let el=0,nb=0;
+      for(let i=0;i<trX.length;i+=b){
+        const bi=idx.slice(i,i+b);
+        el+=net.step(bi.map(k=>trX[k]),bi.map(k=>trY[k])); nb++;
+      }
+      tLoss.push(el/nb);
+      if(valX.length){
+        let vl=0; valX.forEach((x,i)=>{const p=net.predict(x);vl+=(p[0]-valY[i][0])**2;});
+        vLoss.push(vl/valX.length);
+      }
+    }
+    ep=end;
+    const pct=(ep/epochs)*100;
+    pf.style.width=pct+'%'; epl.textContent=`Epoch ${ep} / ${epochs}`;
+    await new Promise(r=>setTimeout(r,0));
+  }
+
+  // Evaluate
+  const pred=x=>denorm(net.predict(x)[0],norm,nFeat);
+  const trPred=trX.map(pred); const trAct=trSet.map(r=>r[nFeat]);
+  const rmseTr=rmse(trAct,trPred); const r2Tr=r2(trAct,trPred);
+  setMetric('m-rtr',rmseTr.toFixed(5));
+  setMetric('m-r2tr',r2Tr.toFixed(4),r2Tr>0.95);
+
+  let tsPredArr=null,tsActArr=null;
+  if(tsX){
+    tsPredArr=tsX.map(pred); tsActArr=sourceTestData.map(r=>r[nFeat]);
+    const rmseTs=rmse(tsActArr,tsPredArr); const r2Ts=r2(tsActArr,tsPredArr);
+    setMetric('m-rts',rmseTs.toFixed(5));
+    setMetric('m-r2ts',r2Ts.toFixed(4),r2Ts>0.95);
+    addLog(`Train RMSE=${rmseTr.toFixed(5)}  R²=${r2Tr.toFixed(4)} | Test RMSE=${rmseTs.toFixed(5)}  R²=${r2Ts.toFixed(4)}`);
+  } else {
+    setMetric('m-rts','N/A'); setMetric('m-r2ts','N/A');
+    addLog(`Train RMSE=${rmseTr.toFixed(5)}  R²=${r2Tr.toFixed(4)}`);
+  }
+
+  mkReg(trAct,trPred,tsActArr,tsPredArr);
+  mkLoss(tLoss,vLoss);
+
+  // Store predictions for download
+  lastPreds={trAct:trAct, trPred, tsAct:tsActArr||[], tsPred:tsPredArr||[]};
+  lastResults={rmseTrain:rmseTr, r2Train:r2Tr,
+    rmseTest:tsX?rmse(tsActArr,tsPredArr):null,
+    r2Test:tsX?r2(tsActArr,tsPredArr):null};
+
+  currentModel={net,norm,nFeat};
+  document.getElementById('btn-save').disabled=false;
+  document.getElementById('btn-train').disabled=false;
+  document.getElementById('dl-bar').className='dl-bar on';
+  isTraining=false;
+  addLog('Training complete ✓');
+}
+
+// ===== Download helpers =====
+function dlCSV(filename, rows){
+  const uri='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.join('\n'));
+  const a=document.createElement('a'); a.href=uri; a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function dlPredTrain(){
+  if(!lastPreds.trAct.length){addLog('No train predictions yet.');return;}
+  const rows=['Actual,Predicted',...lastPreds.trAct.map((v,i)=>`${v},${lastPreds.trPred[i].toFixed(6)}`)];
+  dlCSV('predictions_train.csv',rows);
+  addLog('Downloaded predictions_train.csv');
+}
+function dlPredTest(){
+  if(!lastPreds.tsAct.length){addLog('No test predictions yet.');return;}
+  const rows=['Actual,Predicted',...lastPreds.tsAct.map((v,i)=>`${v},${lastPreds.tsPred[i].toFixed(6)}`)];
+  dlCSV('predictions_test.csv',rows);
+  addLog('Downloaded predictions_test.csv');
+}
+function dlSplitTrain(){
+  if(!splitCSV.Xtr.length){addLog('No auto-split data available.');return;}
+  const nf=splitCSV.Xtr[0].length;
+  const hdr=Array.from({length:nf},(_,i)=>'X'+(i+1)).concat('Y').join(',');
+  const rows=[hdr,...splitCSV.Xtr.map((r,i)=>[...r,splitCSV.Ytr[i]].join(','))];
+  dlCSV('split_train.csv',rows);
+  addLog('Downloaded split_train.csv  ('+splitCSV.Xtr.length+' rows)');
+}
+function dlSplitTest(){
+  if(!splitCSV.Xts.length){addLog('No auto-split data available.');return;}
+  const nf=splitCSV.Xts[0].length;
+  const hdr=Array.from({length:nf},(_,i)=>'X'+(i+1)).concat('Y').join(',');
+  const rows=[hdr,...splitCSV.Xts.map((r,i)=>[...r,splitCSV.Yts[i]].join(','))];
+  dlCSV('split_test.csv',rows);
+  addLog('Downloaded split_test.csv  ('+splitCSV.Xts.length+' rows)');
+}
+function dlResults(){
+  if(!lastResults){addLog('No results yet.');return;}
+  const r=lastResults;
+  const rows=['Metric,Train,Test',
+    'RMSE,'+r.rmseTrain.toFixed(6)+','+(r.rmseTest!=null?r.rmseTest.toFixed(6):'N/A'),
+    'R2,'+r.r2Train.toFixed(6)+','+(r.r2Test!=null?r.r2Test.toFixed(6):'N/A')];
+  dlCSV('ann_results.csv',rows);
+  addLog('Downloaded ann_results.csv');
+}
+
+// ===== Save / Load Model =====
+function saveModel(){
+  if(!currentModel){addLog('No model to save. Train first.');return;}
+  try{
+    const{net,norm,nFeat}=currentModel;
+    const obj={topology:net.topo,acts:net.acts,weights:net.W,biases:net.b,norm,nFeat,v:'1.0'};
+    const json=JSON.stringify(obj,null,2);
+    const uri='data:application/json;charset=utf-8,'+encodeURIComponent(json);
+    const a=document.createElement('a');
+    a.href=uri; a.download='ann_model.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    addLog('Model saved → ann_model.json  ('+Math.round(json.length/1024)+' KB)');
+  }catch(err){addLog('Save error: '+err.message);}
+}
+
+function loadModel(inp){
+  const file=inp.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const d=JSON.parse(e.target.result);
+    const net=new ANN(d.topology,d.acts,{algo:'adam',lr:0.01});
+    net.W=d.weights; net.b=d.biases;
+    currentModel={net,norm:d.norm,nFeat:d.nFeat};
+    document.getElementById('btn-save').disabled=false;
+    addLog(`Model loaded ✓  [${d.topology.join('→')}] | acts: [${d.acts.join(',')}]`);
+  };
+  reader.readAsText(file);
+}
+
+// ===== Predict =====
+function runPred(){
+  if(!currentModel){addLog('Train or load a model first.');return;}
+  const{net,norm,nFeat}=currentModel;
+  const raw=document.getElementById('pred-in').value.split(',').map(v=>parseFloat(v.trim()));
+  if(raw.length!==nFeat||raw.some(isNaN)){
+    document.getElementById('pred-out').innerHTML=`<span style="color:#993C1D">Error: expected ${nFeat} values</span>`;return;
+  }
+  const nx=raw.map((v,j)=>{const d=norm.mx[j]-norm.mn[j];return d<1e-10?0:2*(v-norm.mn[j])/d-1;});
+  const out=denorm(net.predict(nx)[0],norm,nFeat);
+  document.getElementById('pred-out').innerHTML=
+    `<span style="color:#555">Output: </span><strong style="color:#1a1a18;font-size:15px">${out.toFixed(6)}</strong>`;
+}
+
+function batchPredict(inp){
+  if(!currentModel){addLog('Train or load a model first.');return;}
+  const file=inp.files[0]; if(!file) return;
+  const{net,norm,nFeat}=currentModel;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let rows;
+    if(file.name.match(/\.csv$/i)){
+      rows=e.target.result.trim().split('\n').map(l=>l.split(',').map(v=>parseFloat(v.trim())));
+    } else {
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
+      if(rows.length&&rows[0].some(v=>isNaN(parseFloat(v)))) rows=rows.slice(1);
+      rows=rows.map(r=>r.map(v=>parseFloat(v)));
+    }
+    rows=rows.filter(r=>r.length>=nFeat&&r.every(v=>!isNaN(v)));
+    if(!rows.length){addLog('Batch: no valid rows found.');return;}
+    const preds=rows.map(r=>{
+      const nx=r.slice(0,nFeat).map((v,j)=>{const d=norm.mx[j]-norm.mn[j];return d<1e-10?0:2*(v-norm.mn[j])/d-1;});
+      return denorm(net.predict(nx)[0],norm,nFeat);
+    });
+    // Build CSV and download
+    const csv='Prediction\n'+preds.map(v=>v.toFixed(6)).join('\n');
+    const uri2='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    const a=document.createElement('a');
+    a.href=uri2; a.download='predictions.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    addLog(`Batch predict: ${preds.length} rows → predictions.csv`);
+  };
+  if(file.name.match(/\.csv$/i)) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+</script>
+</body>
+</html>
