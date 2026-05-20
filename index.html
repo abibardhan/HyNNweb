@@ -542,7 +542,7 @@ async function startTraining(){
   const ofn=document.getElementById('ofn').value;
   const trainFcn=document.getElementById('algo').value;
   const algoMap=ALGO_MAP[trainFcn]; const algo=algoMap.opt;
-  const epochs=Math.max(1,parseInt(document.getElementById('epochs').value)||100);
+  const epochs=Math.max(1,parseInt(document.getElementById('epochs').value)||1000);
   const lr=parseFloat(document.getElementById('lr').value)||0.01;
   const bs=parseInt(document.getElementById('batch').value)||0;
   const vr=parseFloat(document.getElementById('valratio').value)||0;
